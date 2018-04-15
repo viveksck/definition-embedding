@@ -1,5 +1,4 @@
 import util
-import numpy as np
 from tqdm import tqdm
 from os.path import basename, join
 
@@ -11,19 +10,23 @@ from torch.autograd import Variable
 
 
 class CosineDistanceLoss(nn.Module):
-    def __init__(self, batch_size, margin=0, size_average=True):
+    def __init__(self, batch_size, use_gpu, margin=0, size_average=True):
         super(CosineDistanceLoss, self).__init__()
         self.margin = margin
+        self.use_gpu = use_gpu
         self.batch_size = batch_size
         self.size_average = size_average
-        self.y = Variable(torch.ones(batch_size)).cuda()
+        self.y = Variable(torch.ones(batch_size))
+        if use_gpu:
+            self.y = self.y.cuda()
 
-    @profile
     def forward(self, input1, input2, batch_size):
         if batch_size == self.batch_size:
             y = self.y
         else:
-            y = Variable(torch.ones(batch_size)).cuda()
+            y = Variable(torch.ones(batch_size))
+            if self.use_gpu:
+                y = y.cuda()
         return F.cosine_embedding_loss(input1, input2, y, self.margin, self.size_average)
 
 
@@ -49,7 +52,7 @@ class RNNEncoder(nn.Module):
             self.embed = self.embed.cuda()
 
         # loss function
-        self.loss_cos = CosineDistanceLoss(args.batch_size)
+        self.loss_cos = CosineDistanceLoss(args.batch_size, self.use_gpu)
 
         # pipeline
         rnn = nn.GRU if args.rnn == 'gru' else nn.LSTM
@@ -123,7 +126,6 @@ class RNNEncoder(nn.Module):
         lstm_out = self.dropout(lstm_out)
         return lstm_out[-1]
 
-    @profile
     def get_loss(self, grd_emb, def_sens, weights):
         def_sens = Variable(def_sens)
         grd_emb = Variable(grd_emb)
@@ -170,25 +172,128 @@ class RNNEncoder(nn.Module):
     #     loss /= len(batch_sen_nums)
     #     return loss
 
-    # def estimate_from_defsens(self, def_sens):
-    #     # sentence padding
-    #     pad_size = self.args.pad_size
-    #     pad_token = self.def_word2ix['</s>']
-    #     pad_sens = [util.pad_sentence(s, pad_size, pad_token) for s in def_sens]
+    def estimate_from_defsens(self, def_sens):
+        # sentence padding
+        pad_size = self.args.pad_size
+        pad_token = self.def_word2ix['</s>']
+        pad_sens = [util.pad_sentence(s, pad_size, pad_token) for s in def_sens]
 
-    #     # go through the encoder
-    #     self.eval()
-    #     pad_sens = Variable(LongTensor(pad_sens)).cuda()
-    #     out_embs = self(pad_sens)
-    #     return out_embs
+        # go through the encoder
+        self.eval()
+        pad_sens = Variable(LongTensor(pad_sens))
+        if self.use_gpu:
+            pad_sens = pad_sens.cuda()
+        out_embs = self(pad_sens)
+        return out_embs
 
-    # def estimate_from_strsen(self, sen):
-    #     sen = ['<s>'] + sen.lower().split()
-    #     sen = [self.def_word2ix[w] if w in self.def_word2ix else self.def_word2ix['<unk>'] for w in sen]
-    #     sens = [sen]
-    #     out_embs = self.estimate_from_defsens(sens)
-    #     return out_embs[0].cpu().data.numpy()
+    def estimate_from_strsen(self, sen):
+        sen = ['<s>'] + sen.lower().split()
+        sen = [self.def_word2ix[w] if w in self.def_word2ix else self.def_word2ix['<unk>'] for w in sen]
+        sens = [sen]
+        out_embs = self.estimate_from_defsens(sens)
+        return out_embs[0].cpu().data.numpy()
 
 
+class BOWEncoder(nn.Module):
+    def __init__(self, def_word2ix, args):
+        super(BOWEncoder, self).__init__()
 
+        # input parameters
+        self.args = args
+        self.use_gpu = args.gpu > -1
+        self.emb_dim = args.emb_dim
+        self.pad_size = args.pad_size
+        self.drop_ratio = args.drop_ratio
 
+        # word embedding
+        self.def_word2ix = def_word2ix
+        self.def_vocab_size = len(def_word2ix)
+
+        self.embed = nn.Embedding(self.def_vocab_size, self.emb_dim)
+        self.embed.weight.requires_grad = args.fine_tune
+
+        # loss function
+        self.loss_cos = CosineDistanceLoss(args.batch_size, self.use_gpu)
+
+        # pipeline
+        self.matrix = Variable(torch.randn(self.emb_dim, self.emb_dim))
+        self.emb_dropout = nn.Dropout(p=args.emb_drop)
+
+        # cuda
+        if self.use_gpu:
+            self.embed = self.embed.cuda()
+            self.matrix = self.matrix.cuda()
+
+        # checkpoint and loss record file
+        if args.checkpoint:
+            self.cp_path = args.checkpoint
+        else:
+            self.cp_path = '../checkpoint/bow_{data}_p{pad}_d{drop}_b{batch}_{opt}_lr{lr}'.format(
+                data=basename(args.data).replace('.pk', ''),
+                drop='{}'.format(args.emb_drop),
+                opt=args.optim,
+                batch=args.batch_size,
+                pad=args.pad_size,
+                lr=args.lr
+            )
+            if not args.fine_tune:
+                self.cp_path += '_fix'
+
+    def init_def_embedding(self, def_embed):
+        assert self.emb_dim == def_embed.size(1)
+        assert self.def_vocab_size == def_embed.size(0)
+        self.embed.weight.data.copy_(def_embed)
+
+    def save_checkpoint(self, epoch, train_loss, valid_loss, best_valid_loss):
+        data = {
+            'args': self.args,
+            'epoch': epoch,
+            'train_loss': train_loss,
+            'valid_loss': valid_loss,
+            'best_valid_loss': best_valid_loss,
+            'state_dict': self.state_dict(),
+        }
+        torch.save(data, self.cp_path)
+
+    def forward(self, def_sens):
+        '''
+        Arguments:
+            def_sens (batch_size, pad_size) Variable
+        Returns:
+            (batch_size, emb_dim)
+        '''
+        batch_size = def_sens.size(0)
+        in_embeds = self.embed(def_sens)
+        in_embeds = self.emb_dropout(in_embeds)
+        in_embeds = in_embeds.sum(1)
+        assert in_embeds.size() == (batch_size, self.emb_dim)
+
+        out = torch.mm(in_embeds, self.matrix)
+        return out
+
+    def get_loss(self, grd_emb, def_sens, weights):
+        def_sens = Variable(def_sens)
+        grd_emb = Variable(grd_emb)
+        if self.use_gpu:
+            # grd_emb = grd_emb.cuda()
+            def_sens = def_sens.cuda()
+        out_emb = self(def_sens)
+        assert out_emb.size() == grd_emb.size()
+
+        batch_size = def_sens.size(0)
+        loss = self.loss_cos(out_emb, grd_emb, batch_size)
+        return loss
+
+    def estimate_from_defsens(self, def_sens):
+        # sentence padding
+        pad_size = self.args.pad_size
+        pad_token = self.def_word2ix['</s>']
+        pad_sens = [util.pad_sentence(s, pad_size, pad_token) for s in def_sens]
+
+        # go through the encoder
+        self.eval()
+        pad_sens = Variable(LongTensor(pad_sens))
+        if self.use_gpu:
+            pad_sens = pad_sens.cuda()
+        out_embs = self(pad_sens)
+        return out_embs

@@ -6,10 +6,9 @@ import util
 import random
 import pickle
 import argparse
-import numpy as np
 from tqdm import tqdm
 from collections import defaultdict
-from model import RNNEncoder
+from model import RNNEncoder, BOWEncoder
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('dictionary generation')
@@ -19,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--load', type=str, default='', help='load checkpoint')
     parser.add_argument('-c', '--checkpoint', type=str, default='', help='output checkpoint')
     # network parameter
-    parser.add_argument('-r', '--rnn', choices=['lstm', 'gru'], default='gru', help='rnn')
+    parser.add_argument('-r', '--rnn', choices=['lstm', 'gru', 'bow'], default='gru', help='rnn')
     parser.add_argument('-i', '--hid_dim', type=int, default=512, help='hidden layer dimension')
     parser.add_argument('-p', '--pad_size', type=int, default=20, help='padding_size')
     parser.add_argument('-b', '--batch_size', type=int, default=4, help='batch size')
@@ -88,7 +87,10 @@ if __name__ == '__main__':
     print('load data: {} train, {} valid'.format(len(train_pairs), len(valid_pairs)))
 
     # model
-    encoder = RNNEncoder(def_word2ix, args)
+    encoder = {
+        'gru': RNNEncoder(def_word2ix, args),
+        'bow': BOWEncoder(def_word2ix, args)
+    }[args.rnn]
     encoder.init_def_embedding(def_embed)
 
     # optimizer
@@ -134,7 +136,6 @@ if __name__ == '__main__':
             train_loss.backward()
             optimizer.step()
             epoch_train_loss += util.getval(train_loss)
-        break
 
         # get validation loss
         encoder.eval()
