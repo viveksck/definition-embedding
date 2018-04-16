@@ -86,8 +86,8 @@ if __name__ == '__main__':
     # init model and dataset
     if args.rnn == 'bow':
         encoder = BOWEncoder(def_word2ix, args)
-        validset = dataset.get_bow_dataset(valid_pairs, dic_embed, def_embed, def_word2ix['<unk>'], args.batch_size)
-        trainset = dataset.get_bow_dataset(train_pairs, dic_embed, def_embed, def_word2ix['<unk>'], args.batch_size)
+        validset = dataset.get_bow_dataset(valid_pairs, dic_embed, def_embed, def_word2ix, args.batch_size)
+        trainset = dataset.get_bow_dataset(train_pairs, dic_embed, def_embed, def_word2ix, args.batch_size)
     elif args.rnn == 'gru' or args.rnn == 'lstm':
         encoder = RNNEncoder(def_word2ix, args)
         validset = dataset.get_padded_dataset(valid_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=False)

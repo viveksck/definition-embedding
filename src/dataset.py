@@ -25,9 +25,11 @@ def get_padded_dataset(word_sen_pairs, dic_embed, pad_size, ixpad, batch_size, i
     return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=is_train)
 
 
-def get_bow_dataset(word_sen_pairs, dic_embed, def_embed, ixunk, batch_size):
+def get_bow_dataset(word_sen_pairs, dic_embed, def_embed, def_word2ix, batch_size):
     i = 0
     batches = []
+    stop_words = ['<s>', '</s>', '<unk>', 'a', 'of', 'the', ',', '.']
+    stop_words = {def_word2ix[w] for w in stop_words if w in def_word2ix}
     random.shuffle(word_sen_pairs)
     num_pairs = len(word_sen_pairs)
     while i < num_pairs:
@@ -36,7 +38,7 @@ def get_bow_dataset(word_sen_pairs, dic_embed, def_embed, ixunk, batch_size):
         batch_senemb = []
         for word, sen in batch_pairs:
             sen = sen[1: -1]
-            sen = [w for w in sen if w != ixunk]
+            sen = [w for w in sen if w not in stop_words]
             if not sen:
                 continue
             sen_mat = def_embed[sen]

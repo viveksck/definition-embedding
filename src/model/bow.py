@@ -38,13 +38,14 @@ class BOWEncoder(BaseEncoder):
         Returns:
             (batch_size, emb_dim)
         '''
-        out = self.linear(sen_emb)
+        dropped_emb = self.emb_dropout(sen_emb)
+        out = self.linear(dropped_emb)
         return out
 
     def estimate_from_defsens(self, def_sens):
         senembs = []
-        stop_words = ['<s>', '</s>', '<unk>']
-        stop_words = {self.def_word2ix[w] for w in stop_words}
+        stop_words = ['<s>', '</s>', '<unk>', 'a', 'of', 'the', ',', '.']
+        stop_words = {self.def_word2ix[w] for w in stop_words if w in self.def_word2ix}
         for sen in def_sens:
             sen = [w for w in sen if w not in stop_words]
             if not sen:
