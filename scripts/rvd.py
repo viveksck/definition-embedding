@@ -1,16 +1,18 @@
 import torch
 import pickle
 import argparse
-from os.path import basename, join, dirname, abspath
+from tqdm import tqdm
 from collections import defaultdict
-from scipy.spatial.distance import cosine
-from multiprocessing import Pool, Value, Lock, Manager
+from multiprocessing import Pool, Manager
+from os.path import basename, join, dirname, abspath
+
 
 if __name__ == '__main__':
     import sys
     sys.path.append(abspath('../src'))
-    import util
-    import model
+    import model.util as util
+    from model.rnn import RNNEncoder
+    from model.bow import BOWEncoder
 
     parser = argparse.ArgumentParser('dictionary generation')
     parser.add_argument('-p', '--process', type=int, default=20)
@@ -38,8 +40,8 @@ if __name__ == '__main__':
     # load model
     model_args.gpu = -1
     encoder = {
-        'gru': model.RNNEncoder(def_word2ix, model_args),
-        'bow': model.BOWEncoder(def_word2ix, model_args)
+        'gru': RNNEncoder(def_word2ix, model_args),
+        'bow': BOWEncoder(def_word2ix, model_args)
     }[model_args.rnn]
     encoder.load_state_dict(checkpoint['state_dict'])
     print('[2] load model OK!')
@@ -48,6 +50,7 @@ if __name__ == '__main__':
     sens = [s for _, s in rvd_pairs]
     grd_words = [w for w, _ in rvd_pairs]
     out_embs = encoder.estimate_from_defsens(sens).data.numpy()
+    out_embs = util.normalize_matrix_by_row(out_embs)
     print('[3] calculate embedding OK!')
 
     # output file
@@ -56,17 +59,28 @@ if __name__ == '__main__':
     outpath = join(outdir, basename(encoder.cp_path) + '.txt')
     wf = open(outpath, 'w')
 
-    # multiprocess evaluation starts
+    # evaluation starts
+    rvd_candidates = list(rvd_candidates)
+    rvd_word2ix = {w: i for i, w in enumerate(rvd_candidates)}
+
+    rvd_candi_embs = dic_embed[rvd_candidates].numpy()
+    rvd_norm_candi_embs = util.normalize_matrix_by_row(rvd_candi_embs)
+    print('[4] normalize rvd embeddings OK!')
+
+    rvd_candi_ranges = range(len(rvd_candidates))
+    simi_matrix = out_embs.dot(rvd_norm_candi_embs.transpose())
+    print('[5] calculate similarity in batch OK!')
+
+    # multi process ranking
     poses = Manager().list()
 
-    def test(i):
-        out_emb = out_embs[i]
-        rank = sorted(rvd_candidates, key=lambda w: cosine(out_emb, dic_embed[w]))
-        pos = rank.index(grd_words[i])
-        poses.append(pos)
+    def single_sort(i):
+        rank = sorted(range(len(rvd_candidates)), key=lambda j: simi_matrix[i][j], reverse=True)
+        poses.append(rank.index(rvd_word2ix[grd_words[i]]))
 
     pool = Pool(processes=args.process)
-    pool.map(test, list(range(out_embs.shape[0])))
+    pool.map(single_sort, list(range(out_embs.shape[0])))
+    print('[6] ranking in batch OK!')
     print('----# samples:', len(poses))
 
     # calculate accuracy score

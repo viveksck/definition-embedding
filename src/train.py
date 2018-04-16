@@ -1,14 +1,17 @@
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
-import util
 import random
 import pickle
+import dataset
 import argparse
+import model.util as util
+
 from tqdm import tqdm
 from collections import defaultdict
-from model import RNNEncoder, BOWEncoder
+from model.rnn import RNNEncoder
+from model.bow import BOWEncoder
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('dictionary generation')
@@ -70,35 +73,36 @@ if __name__ == '__main__':
         def_embed = def_embed.cuda()
         dic_embed = dic_embed.cuda()
 
-    random.shuffle(train_pairs)
     if args.num_train > 0:
+        random.shuffle(train_pairs)
         train_pairs = train_pairs[:args.num_train]
+        valid_pairs = valid_pairs[:args.num_train]
     num_train_pairs = len(train_pairs)
     num_train_vocab = len({word for word, _ in train_pairs})
 
     train_grd_embed = [dic_embed[w] for w, _ in train_pairs]
     valid_grd_embed = [dic_embed[w] for w, _ in valid_pairs]
 
-    validset = util.get_dataset(valid_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], is_train=False)
-    trainset = util.get_dataset(train_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], is_train=True)
-    valid_loader = DataLoader(dataset=validset, batch_size=args.batch_size)
-    train_loader = DataLoader(dataset=trainset, batch_size=args.batch_size, shuffle=True)
-
-    print('load data: {} train, {} valid'.format(len(train_pairs), len(valid_pairs)))
-
-    # model
-    encoder = {
-        'gru': RNNEncoder(def_word2ix, args),
-        'bow': BOWEncoder(def_word2ix, args)
-    }[args.rnn]
+    # init model and dataset
+    if args.rnn == 'bow':
+        encoder = BOWEncoder(def_word2ix, args)
+        validset = dataset.get_bow_dataset(valid_pairs, dic_embed, def_embed, def_word2ix['<unk>'], args.batch_size)
+        trainset = dataset.get_bow_dataset(train_pairs, dic_embed, def_embed, def_word2ix['<unk>'], args.batch_size)
+    elif args.rnn == 'gru' or args.rnn == 'lstm':
+        encoder = RNNEncoder(def_word2ix, args)
+        validset = dataset.get_padded_dataset(valid_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=False)
+        trainset = dataset.get_padded_dataset(train_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=True)
     encoder.init_def_embedding(def_embed)
+    print('load data: {} train, {} valid'.format(len(train_pairs), len(valid_pairs)))
 
     # optimizer
     lr = args.lr
+    params = list(filter(lambda t: t.requires_grad, encoder.parameters()))
+    print('# params:', len(params))
     opts = {
-        'Adam': optim.Adam(filter(lambda t: t.requires_grad, encoder.parameters()), lr=lr),
-        'Adadelta': optim.Adadelta(filter(lambda t: t.requires_grad, encoder.parameters()), lr=1),
-        'SGD': optim.SGD(filter(lambda t: t.requires_grad, encoder.parameters()), lr=lr, momentum=0.9),
+        'Adam': optim.Adam(params, lr=lr),
+        'Adadelta': optim.Adadelta(params, lr=1),
+        'SGD': optim.SGD(params, lr=lr, momentum=0.9),
     }
     optimizer = opts[args.optim]
 
@@ -126,21 +130,21 @@ if __name__ == '__main__':
         epoch_train_loss = 0.0
         epoch_valid_loss = 0.0
 
-        for i, (train_grd_embed, sens) in tqdm(enumerate(train_loader), total=len(train_loader), ncols=50):
+        for i, train_tup in tqdm(enumerate(trainset), total=len(trainset), ncols=50):
         # for i, (words, sens, sen_nums, weights) in tqdm(enumerate(train_batches), total=len(train_batches), ncols=30):
-            if train_grd_embed.size(0) == 1:
+            if train_tup[0].size(0) == 1:
                 continue
             encoder.zero_grad()
             # train_loss = encoder.get_batch_loss(words, sens, batch_sen_nums=sen_nums, weights=weights)
-            train_loss = encoder.get_loss(train_grd_embed, sens, weights=None)
+            train_loss = encoder.get_loss(train_tup)
             train_loss.backward()
             optimizer.step()
             epoch_train_loss += util.getval(train_loss)
 
         # get validation loss
         encoder.eval()
-        for j, (valid_grd_embed, sens) in enumerate(valid_loader):
-            valid_loss = encoder.get_loss(valid_grd_embed, sens, weights=None)
+        for j, valid_tup in enumerate(validset):
+            valid_loss = encoder.get_loss(valid_tup)
             epoch_valid_loss += util.getval(valid_loss)
         encoder.train()
 

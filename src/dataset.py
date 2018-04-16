@@ -1,25 +1,13 @@
 import torch
-from torch.autograd import Variable
-from torch.utils.data import Dataset
+import random
 from collections import defaultdict
+from model.util import pad_sentence
+from torch.autograd import Variable
+from torch.utils.data import Dataset, DataLoader
 
 
-def getval(variable):
-    return variable.data.storage()[0]
-
-
-def encode_sentence(sen, word2ix):
-    return [word2ix[w] if w in word2ix else word2ix['<unk>'] for w in sen]
-
-
-def pad_sentence(sen, pad_size, ixpad):
-    padsen = sen[:]
-    padsen += [ixpad] * (pad_size - len(padsen))
-    return padsen[:pad_size]
-
-
-def get_dataset(word_sen_pairs, dic_embed, pad_size, ixend, is_train):
-    class Pairs(Dataset):
+def get_padded_dataset(word_sen_pairs, dic_embed, pad_size, ixpad, batch_size, is_train):
+    class PaddedDataset(Dataset):
         def __init__(self, pairs):
             self.len = len(pairs)
             self.dic_embed = dic_embed
@@ -32,14 +20,37 @@ def get_dataset(word_sen_pairs, dic_embed, pad_size, ixend, is_train):
         def __len__(self):
             return self.len
 
-    pairs = [(word, pad_sentence(sen, pad_size, ixend)) for word, sen in word_sen_pairs]
-    return Pairs(pairs)
+    pairs = [(word, pad_sentence(sen, pad_size, ixpad)) for word, sen in word_sen_pairs]
+    dataset = PaddedDataset(pairs)
+    return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=is_train)
 
 
-def get_batches(word_sen_weight_pairs, pad_size, ixpad, batch_size):  
-    import torch
-    import random
+def get_bow_dataset(word_sen_pairs, dic_embed, def_embed, ixunk, batch_size):
+    i = 0
+    batches = []
+    random.shuffle(word_sen_pairs)
+    num_pairs = len(word_sen_pairs)
+    while i < num_pairs:
+        batch_pairs = word_sen_pairs[i: i + batch_size]
+        batch_words = []
+        batch_senemb = []
+        for word, sen in batch_pairs:
+            sen = sen[1: -1]
+            sen = [w for w in sen if w != ixunk]
+            if not sen:
+                continue
+            sen_mat = def_embed[sen]
+            sen_emb = sen_mat.sum(0) / len(sen)
+            batch_words.append(word)
+            batch_senemb.append(sen_emb)
+        batch_grdemb = dic_embed[batch_words]
+        batch_senemb = torch.stack(batch_senemb)
+        batches.append((batch_grdemb, batch_senemb))
+        i += batch_size
+    return batches
 
+
+def get_weighted_batches(word_sen_weight_pairs, pad_size, ixpad, batch_size):
     # get word2padsens
     word2padsen_weights = defaultdict(list)
     for word, sen, weight in word_sen_weight_pairs:
@@ -76,23 +87,6 @@ def get_batches(word_sen_weight_pairs, pad_size, ixpad, batch_size):
     return batches
 
 
-def topk_pairs(pairs, k):
-    w2c = defaultdict(int)
-    new_pairs = []
-    for w, s in pairs:
-        if w2c[w] >= k:
-            continue
-        w2c[w] += 1
-        new_pairs.append((w, s))
-    return new_pairs
-
-
-def mkdir(dirpath):
-    import os
-    if not os.path.isdir(dirpath):
-        os.mkdir(dirpath)
-
-
 if __name__ == '__main__':
     word_sen_pairs = [
         [1, [20, 30, 40]],
@@ -104,21 +98,3 @@ if __name__ == '__main__':
     batches = get_batches(word_sen_pairs, 10, 11, 2)
     for words, sens in batches:
         print('words', words, 'sens', sens)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
