@@ -8,6 +8,7 @@ import argparse
 import model.util as util
 
 from tqdm import tqdm
+from itertools import chain
 from collections import defaultdict
 from model.rnn import RNNEncoder
 from model.bow import BOWEncoder
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--rnn', choices=['lstm', 'gru', 'bow'], default='gru', help='rnn')
     parser.add_argument('-i', '--hid_dim', type=int, default=512, help='hidden layer dimension')
     parser.add_argument('-p', '--pad_size', type=int, default=20, help='padding_size')
-    parser.add_argument('-b', '--batch_size', type=int, default=4, help='batch size')
+    parser.add_argument('-b', '--batch_size', type=int, default=16, help='batch size')
     parser.add_argument('-d', '--drop_ratio', type=float, default=0.1, help='dropout ratio')
     parser.add_argument('--emb_drop', type=float, default=0.25, help='embedding dropout rate')
     parser.add_argument('-l', '--num_layers', type=int, default=2, help='number of lstm layers')
@@ -67,6 +68,7 @@ if __name__ == '__main__':
     def_word2ix = data['def_word2ix']
     train_pairs = data['train_pairs']
     valid_pairs = data['valid_pairs']
+    dic_embed.requires_grad = False
     args.emb_dim = dic_embed.size(1)
     assert args.emb_dim == dic_embed.size(1)
     if args.gpu > -1:
@@ -74,14 +76,16 @@ if __name__ == '__main__':
         dic_embed = dic_embed.cuda()
 
     if args.num_train > 0:
-        random.shuffle(train_pairs)
         train_pairs = train_pairs[:args.num_train]
         valid_pairs = valid_pairs[:args.num_train]
-    num_train_pairs = len(train_pairs)
-    num_train_vocab = len({word for word, _ in train_pairs})
 
-    train_grd_embed = [dic_embed[w] for w, _ in train_pairs]
-    valid_grd_embed = [dic_embed[w] for w, _ in valid_pairs]
+    random.shuffle(train_pairs)
+    num_train_pairs = len(train_pairs)
+    num_train_vocab = len({tup[0] for tup in train_pairs})
+    print('load data: {} train, {} valid'.format(len(train_pairs), len(valid_pairs)))
+
+    train_grd_embed = [dic_embed[tup[0]] for tup in train_pairs]
+    valid_grd_embed = [dic_embed[tup[0]] for tup in valid_pairs]
 
     # init model and dataset
     if args.rnn == 'bow':
@@ -90,21 +94,24 @@ if __name__ == '__main__':
         trainset = dataset.get_bow_dataset(train_pairs, dic_embed, def_embed, def_word2ix, args.batch_size)
     elif args.rnn == 'gru' or args.rnn == 'lstm':
         encoder = RNNEncoder(def_word2ix, args)
+        # trainset, weights = dataset.get_parameter_batches(train_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, use_gpu=args.gpu > -1)
+        trainset = dataset.get_weighted_batches(train_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size)
         validset = dataset.get_padded_dataset(valid_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=False)
-        trainset = dataset.get_padded_dataset(train_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=True)
+    trainset = list(trainset)
+    num_train_batches = len(trainset)
     encoder.init_def_embedding(def_embed)
-    print('load data: {} train, {} valid'.format(len(train_pairs), len(valid_pairs)))
 
     # optimizer
     lr = args.lr
+    # params = list(chain(filter(lambda t: t.requires_grad, encoder.parameters()), [weights]))
     params = list(filter(lambda t: t.requires_grad, encoder.parameters()))
-    print('# params:', len(params))
     opts = {
         'Adam': optim.Adam(params, lr=lr),
         'Adadelta': optim.Adadelta(params, lr=1),
         'SGD': optim.SGD(params, lr=lr, momentum=0.9),
     }
     optimizer = opts[args.optim]
+
 
     # GPU setting
     if args.gpu > -1:
@@ -123,20 +130,24 @@ if __name__ == '__main__':
 
     # start training
     util.mkdir('../checkpoint')
-    for epoch in range(start_epoch, 300):
+    for epoch in range(start_epoch, 30):
         print('epoch', epoch)
         print(args)
 
+        sample_ratio = 1
         epoch_train_loss = 0.0
         epoch_valid_loss = 0.0
 
-        for i, train_tup in tqdm(enumerate(trainset), total=len(trainset), ncols=50):
+        # sample training set
+        # random.shuffle(trainset)
+        # num_train_sampled = int(num_train_batches * sample_ratio)
+
+        for i, train_tup in tqdm(enumerate(trainset), total=num_train_batches, ncols=50):
         # for i, (words, sens, sen_nums, weights) in tqdm(enumerate(train_batches), total=len(train_batches), ncols=30):
-            if train_tup[0].size(0) == 1:
-                continue
             encoder.zero_grad()
-            # train_loss = encoder.get_batch_loss(words, sens, batch_sen_nums=sen_nums, weights=weights)
-            train_loss = encoder.get_loss(train_tup)
+            # train_loss = encoder.get_loss(train_tup)
+            train_loss = encoder.get_word_batch_loss(train_tup)
+            # train_loss = encoder.get_weighted_loss(train_tup)
             train_loss.backward()
             optimizer.step()
             epoch_train_loss += util.getval(train_loss)
@@ -165,7 +176,7 @@ if __name__ == '__main__':
             patience = args.patience
             best_valid_loss = epoch_valid_loss
 
-        if patience < 0 or lr < 0.00000001:
+        if patience < 0 or lr < 0.000001:
             break
 
         encoder.save_checkpoint(epoch, epoch_train_loss, epoch_valid_loss, best_valid_loss)

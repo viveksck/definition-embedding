@@ -34,7 +34,10 @@ if __name__ == '__main__':
     dic_word2ix = data['dic_word2ix']
     def_word2ix = data['def_word2ix']
     rvd_candidates = set(data['rvd_candidates'])
+    print('#candi:', len(rvd_candidates))
+    print('#pairs:', len(rvd_pairs))
     rvd_pairs = [(w, s) for w, s in rvd_pairs if w in rvd_candidates]
+    print('#pairs:', len(rvd_pairs))
     print('[1] load data OK:', model_args.data, len(rvd_pairs))
 
     # load model
