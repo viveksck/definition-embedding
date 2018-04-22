@@ -49,7 +49,7 @@ if __name__ == '__main__':
     # load ground embed; calculate output embed
     sens = [s for _, s in rvd_pairs]
     grd_words = [w for w, _ in rvd_pairs]
-    out_embs = encoder.estimate_from_defsens(sens).data.numpy()
+    out_embs = encoder.estimate_from_idxsens(sens)
     out_embs = util.normalize_matrix_by_row(out_embs)
     print('[3] calculate embedding OK!')
 

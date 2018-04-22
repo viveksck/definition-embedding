@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
 
 
-def get_padded_dataset(word_sen_pairs, dic_embed, pad_size, ixpad, batch_size, is_train):
+def get_padded_dataset(word_sen_pairs, dic_embed, pad_size, def_word2ix, batch_size, is_train):
     class PaddedDataset(Dataset):
         def __init__(self, pairs):
             self.len = len(pairs)
@@ -20,7 +20,7 @@ def get_padded_dataset(word_sen_pairs, dic_embed, pad_size, ixpad, batch_size, i
         def __len__(self):
             return self.len
 
-    pairs = [(word, pad_sentence(sen, pad_size, ixpad)) for word, sen in word_sen_pairs]
+    pairs = [(word, pad_sentence(sen, pad_size, def_word2ix)) for word, sen in word_sen_pairs]
     dataset = PaddedDataset(pairs)
     return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=is_train)
 
@@ -52,11 +52,11 @@ def get_bow_dataset(word_sen_pairs, dic_embed, def_embed, def_word2ix, batch_siz
     return batches
 
 
-def get_weighted_batches(word_sen_weight_pairs, pad_size, ixpad, batch_size):
+def get_weighted_batches(word_sen_weight_pairs, pad_size, def_word2ix, batch_size):
     # get word2padsens
     word2padsen_weights = defaultdict(list)
     for word, sen, weight in word_sen_weight_pairs:
-        padsen = pad_sentence(sen, pad_size, ixpad)
+        padsen = pad_sentence(sen, pad_size, def_word2ix)
         word2padsen_weights[word].append((padsen, weight))
     word2padsen_weights = dict(word2padsen_weights)
     

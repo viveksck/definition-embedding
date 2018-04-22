@@ -31,7 +31,7 @@ class RNNEncoder(BaseEncoder):
         self.hidden2embed = nn.Linear(self.hid_dim, self.emb_dim)
 
         # checkpoint and loss record file
-        self.cp_path = '../checkpoint/en_{data}_h{hid}_p{pad}_l{layer}_d{drop}_b{batch}_{rnn}_{opt}_lr{lr}'.format(
+        self.cp_path = '../checkpoint/{data}_h{hid}_p{pad}_l{layer}_d{drop}_b{batch}_{rnn}_{opt}_lr{lr}'.format(
             emb=args.emb_dim,
             hid=args.hid_dim,
             data=basename(args.data).replace('.pk', ''),

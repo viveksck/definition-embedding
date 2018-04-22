@@ -1,4 +1,5 @@
-import numpy as np
+import numpy
+from numpy import linalg
 from collections import defaultdict
 
 
@@ -10,9 +11,13 @@ def encode_sentence(sen, word2ix):
     return [word2ix[w] if w in word2ix else word2ix['<unk>'] for w in sen]
 
 
-def pad_sentence(sen, pad_size, ixpad):
+def pad_sentence(sen, pad_size, def_word2ix):
+    token_s = def_word2ix['<s>']
+    token_e = def_word2ix['</s>']
     padsen = sen[:]
-    padsen += [ixpad] * (pad_size - len(padsen))
+    if not padsen or padsen[0] != token_s:
+        padsen = [token_s] + padsen
+    padsen += [token_e] * (pad_size - len(padsen))
     return padsen[:pad_size]
 
 
@@ -28,8 +33,8 @@ def topk_pairs(pairs, k):
 
 
 def normalize_matrix_by_row(np_mat):
-    from numpy import linalg
-    row_norm = linalg.norm(np_mat, axis=1)
+    assert isinstance(np_mat, numpy.ndarray)
+    row_norm = linalg.norm(np_mat.copy(), axis=1)
     return np_mat / row_norm.reshape(-1, 1)
 
 

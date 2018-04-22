@@ -5,6 +5,7 @@ from model.util import pad_sentence
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import LongTensor, FloatTensor
 from torch.autograd import Variable
 
@@ -38,8 +39,7 @@ class BOWEncoder(BaseEncoder):
         Returns:
             (batch_size, emb_dim)
         '''
-        dropped_emb = self.emb_dropout(sen_emb)
-        out = self.linear(dropped_emb)
+        out = self.linear(F.relu(sen_emb))
         return out
 
     def estimate_from_defsens(self, def_sens):

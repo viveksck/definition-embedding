@@ -8,6 +8,7 @@ import argparse
 import model.util as util
 
 from tqdm import tqdm
+from pprint import pprint
 from collections import defaultdict
 from model.rnn import RNNEncoder
 from model.bow import BOWEncoder
@@ -16,7 +17,7 @@ from model.bow import BOWEncoder
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('dictionary generation')
     # configuration
-    parser.add_argument('-g', '--gpu', type=int, default=-1)
+    parser.add_argument('-g', '--gpu', type=int, required=True)
     parser.add_argument('--data', type=str, required=True)
     parser.add_argument('--load', type=str, default='', help='load checkpoint')
     parser.add_argument('-c', '--checkpoint', type=str, default='', help='output checkpoint')
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--rnn', choices=['lstm', 'gru', 'bow'], default='gru', help='rnn')
     parser.add_argument('-i', '--hid_dim', type=int, default=512, help='hidden layer dimension')
     parser.add_argument('-p', '--pad_size', type=int, default=20, help='padding_size')
-    parser.add_argument('-b', '--batch_size', type=int, default=4, help='batch size')
+    parser.add_argument('-b', '--batch_size', type=int, default=16, help='batch size')
     parser.add_argument('-d', '--drop_ratio', type=float, default=0.1, help='dropout ratio')
     parser.add_argument('--emb_drop', type=float, default=0.25, help='embedding dropout rate')
     parser.add_argument('-l', '--num_layers', type=int, default=2, help='number of lstm layers')
@@ -54,7 +55,7 @@ if __name__ == '__main__':
         # args.batch_size = ckargs.batch_size
         args.drop_ratio = ckargs.drop_ratio
         args.num_layers = ckargs.num_layers
-    print(args)
+    pprint(vars(args))
 
     # load data
     print('loading data from:', args.data)
@@ -90,8 +91,8 @@ if __name__ == '__main__':
         trainset = dataset.get_bow_dataset(train_pairs, dic_embed, def_embed, def_word2ix, args.batch_size)
     elif args.rnn == 'gru' or args.rnn == 'lstm':
         encoder = RNNEncoder(def_word2ix, args)
-        validset = dataset.get_padded_dataset(valid_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=False)
-        trainset = dataset.get_padded_dataset(train_pairs, dic_embed, args.pad_size, def_word2ix['</s>'], args.batch_size, is_train=True)
+        trainset = dataset.get_padded_dataset(train_pairs, dic_embed, args.pad_size, def_word2ix, args.batch_size, is_train=True)
+        validset = dataset.get_padded_dataset(valid_pairs, dic_embed, args.pad_size, def_word2ix, args.batch_size, is_train=False)
     encoder.init_def_embedding(def_embed)
     print('load data: {} train, {} valid'.format(len(train_pairs), len(valid_pairs)))
 
@@ -165,7 +166,7 @@ if __name__ == '__main__':
             patience = args.patience
             best_valid_loss = epoch_valid_loss
 
-        if patience < 0 or lr < 0.00000001:
+        if patience < 0 or lr < 0.000001:
             break
 
         encoder.save_checkpoint(epoch, epoch_train_loss, epoch_valid_loss, best_valid_loss)
