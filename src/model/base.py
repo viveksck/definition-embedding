@@ -181,7 +181,7 @@ class BaseEncoder(nn.Module):
         for sen in str_sens:
             sen = sen.lower().split()
             sen = [self.def_word2ix[w] if w in self.def_word2ix else self.def_word2ix['<unk>'] for w in sen]
-        sens.append(sen)
+            sens.append(sen)
         out_embs = self.estimate_from_idxsens(sens, normalize=normalize)
         return out_embs
 
