@@ -5,8 +5,8 @@
 
 ## Prerequirement
 1. Input Data
-	* Pretrained word embedding pickle file: a python dict (key: word, value: embedding list). e.g. `{'apple': [0.1, 0.2, 0.3]}`
-	* Dictionary file: each line is formatted as `word <tab> definition sentence`. e.g. `apple<tab>a sweet fruit with red or yellow skin`
+	* Pretrained word embedding pickle file: a python dict (key: word, value: embedding list). [download](https://www.dropbox.com/s/bogsy2hwsqs6rud/felix-train.txt?dl=0)
+	* Dictionary file: each line is formatted as `word <tab> definition sentence`. [download](https://www.dropbox.com/s/eriptqlofkxvx6x/glove.6B.100d.pk?dl=0)
 
 2. Python environment
 	* PyTorch 0.31
