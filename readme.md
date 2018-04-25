@@ -1,7 +1,7 @@
 # Learning Word Embeddings Using Definitions
 
 ## Overview
-
+This is a re-implementation of [Learning to Understand Phrases by Embedding the Dictionary](https://arxiv.org/abs/1504.00548) in PyTorch.
 
 ## Prerequirement
 1. Input Data
