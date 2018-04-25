@@ -32,7 +32,7 @@ Arguments:
 
 ### Preprocess - generate training data
 
-Pack training and evaluation data in a single pickle file with:
+Pack training and evaluation data in a single pickle file. Just an intermediate input file to make it easier for the model to read.
 
 ```
 python preprocess.py -r $PATH_RVD_DIR -e $PATH_EMBEDDING -d $PATH_DIC_FILE -o $PATH_OUT_FILE -v $VOCAB_SIZE --valid_ratio $VALID_RATIO
