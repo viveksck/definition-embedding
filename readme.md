@@ -76,3 +76,7 @@ Arguments:
 * $PATH_CHECKPOINT (optional): path to the checkpoint. You can skip this argument and the model will store the checkpoint to the default path.
 
 ### Inference
+
+Please refer to `scripts/case.ipynb` for now on how to initialize the model and do the inference.
+
+
