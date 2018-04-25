@@ -26,8 +26,8 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--hid_dim', type=int, default=512, help='hidden layer dimension')
     parser.add_argument('-p', '--pad_size', type=int, default=20, help='padding_size')
     parser.add_argument('-b', '--batch_size', type=int, default=16, help='batch size')
-    parser.add_argument('-d', '--drop_ratio', type=float, default=0.1, help='dropout ratio')
-    parser.add_argument('--emb_drop', type=float, default=0.25, help='embedding dropout rate')
+    parser.add_argument('-d', '--drop_ratio', type=float, default=0.0, help='dropout ratio')
+    parser.add_argument('--emb_drop', type=float, default=0.0, help='embedding dropout rate')
     parser.add_argument('-l', '--num_layers', type=int, default=2, help='number of lstm layers')
     # training setting
     parser.add_argument('-s', '--num_train', type=int, default=-1, help='number of training pairs used. -1 means all data.')

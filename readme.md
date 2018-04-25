@@ -35,14 +35,14 @@ Arguments:
 Pack training and evaluation data in a single pickle file. Just an intermediate input file to make it easier for the model to read.
 
 ```
-python preprocess.py -r $PATH_RVD_DIR -e $PATH_EMBEDDING -d $PATH_DIC_FILE -o $PATH_OUT_FILE -v $VOCAB_SIZE --valid_ratio $VALID_RATIO
+python preprocess.py -r $PATH_RVD_DIR -e $PATH_EMBEDDING -d $PATH_DIC_FILE -o $PATH_DATA -v $VOCAB_SIZE --valid_ratio $VALID_RATIO
 ```
 
 Arguments:
 * $PATH_RVD_DIR: path to the reverse dictionary file folder
 * $PATH_EMBEDDING: path to the embedding pickle file
-* $PATH_DIC_FILE: path to the tokenized dictionary file (the output of last step)
-* $PATH_OUT_FILE: path to the output pickle file
+* $PATH_DIC_FILE: path to the tokenized dictionary file (the output file of last step)
+* $PATH_DATA: path to the output pickle file
 * $VOCAB_SIZE (default 30000): We only pick the most frequent $VOCAB_SIZE words as input. Other words will be replaced by `<unk>`
 * $VALID_RATIO (default 0.05): ration of the validation set in the entire training set
 
@@ -62,3 +62,17 @@ Output content:
     'rvd_pairs_concept': rvd_pairs_concept,
 }
 ```
+
+### Training
+
+```
+cd src
+python train.py -g $GPU --data $PATH_DATA -c $PATH_CHECKPOINT
+```
+
+Arguments:
+* $GPU: which gpu to use. `-1` means train on CPU.
+* $PATH_DATA: path to the input data file (the output file of last step)
+* $PATH_CHECKPOINT (optional): path to the checkpoint. You can skip this argument and the model will store the checkpoint to the default path.
+
+### Inference
