@@ -16,17 +16,49 @@
 ## Pipeline
 ### Preprocess - tokenized dictionary file
 
-Tokenize the original dictionary file. e.g. `a sweet fruit, with red (yellow) skin` to `a sweet fruit , with red ( yellow ) skin`
-
-Arguments:
-	*  $PATH_DIC_FILE: path to the original dictionary file
-	*  $PATH_OUT_FILE: path to the tokenized dictionary file
-
 ```
 cd scripts
+```
+
+Tokenize the original dictionary file. e.g. `a sweet fruit, with red (yellow) skin` to `a sweet fruit , with red ( yellow ) skin`
+
+```
 python tokenize_dict.py -f $PATH_DIC_FILE -o $PATH_OUT_FILE
 ```
 
+Arguments:
+* $PATH_DIC_FILE: path to the original dictionary file
+* $PATH_OUT_FILE: path to the tokenized dictionary file
+
 ### Preprocess - generate training data
 
-Pack 
+Pack training and evaluation data in a single pickle file with:
+
+```
+python preprocess.py -r $PATH_RVD_DIR -e $PATH_EMBEDDING -d $PATH_DIC_FILE -o $PATH_OUT_FILE -v $VOCAB_SIZE --valid_ratio $VALID_RATIO
+```
+
+Arguments:
+* $PATH_RVD_DIR: path to the reverse dictionary file folder
+* $PATH_EMBEDDING: path to the embedding pickle file
+* $PATH_DIC_FILE: path to the tokenized dictionary file (the output of last step)
+* $PATH_OUT_FILE: path to the output pickle file
+* $VOCAB_SIZE (default 30000): We only pick the most frequent $VOCAB_SIZE words as input. Other words will be replaced by `<unk>`
+* $VALID_RATIO (default 0.05): ration of the validation set in the entire training set
+
+Output content:
+```
+{
+    'args': vars(args),
+    'dic_embed': dic_embed,
+    'def_embed': def_embed,
+    'dic_word2ix': dic_word2ix,
+    'def_word2ix': def_word2ix,
+    'train_pairs': train_pairs,
+    'valid_pairs': valid_pairs,
+    'rvd_candidates': rvd_candidates,
+    'rvd_pairs_seen': rvd_pairs_seen,
+    'rvd_pairs_unseen': rvd_pairs_unseen,
+    'rvd_pairs_concept': rvd_pairs_concept,
+}
+```
