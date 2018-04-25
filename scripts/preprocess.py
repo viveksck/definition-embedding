@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('data preprocess')
     parser.add_argument('--valid_ratio', type=float, default=0.05)
     parser.add_argument('-r', '--rvd_dir', type=str, required=True)
-    parser.add_argument('-v', '--voc_size', type=int, default=10000)
+    parser.add_argument('-v', '--voc_size', type=int, default=30000)
     parser.add_argument('-e', '--emb_file', type=str, required=True)
     parser.add_argument('-d', '--dic_file', type=str, required=True)
     parser.add_argument('-o', '--out_file', type=str, required=True)
